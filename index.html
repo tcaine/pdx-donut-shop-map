@@ -62,12 +62,100 @@
       line-height: 1.4;
       font-size: 14px;
     }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portland Donut Rankings Map</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #faf8f3;
+      color: #222;
+    }
+
+    header {
+      background: white;
+      border-bottom: 1px solid #ddd;
+      padding: 14px 16px 10px 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 1.2rem;
+      line-height: 1.2;
+    }
+
+    .sub {
+      font-size: 0.95rem;
+      color: #555;
+    }
+
+    .toolbar {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button.filter-btn {
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button.filter-btn.active {
+      border-color: #111;
+      font-weight: bold;
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100vh - 128px);
+    }
+
+    .leaflet-popup-content {
+      min-width: 220px;
+    }
+
+    .popup-title {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .legend {
+      background: white;
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.18);
+      font-size: 13px;
+      line-height: 1.35;
+    }
 
     .legend-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin: 4px 0;
+      margin-top: 4px;
     }
 
     .dot {
@@ -77,15 +165,21 @@
       display: inline-block;
     }
 
-    .leaflet-popup-content {
-      min-width: 220px;
+    a {
+      color: #0b57d0;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Donut Shop Map</h1>
-    <div class="sub">Tap a marker to see the shop and its highest donut score.</div>
+    <h1>Portland Donut Rankings Map</h1>
+    <div class="sub">Tap a marker to see the shop, top score, and best donut sampled.</div>
+    <div class="toolbar">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="9">9.0+</button>
+      <button class="filter-btn" data-filter="8">8.0+</button>
+      <button class="filter-btn" data-filter="7">7.0+</button>
+    </div>
   </header>
 
   <div id="map"></div>
@@ -93,99 +187,154 @@
   <script>
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUtsvypiFEGpaoCJsTDe_HetHkdJziRKKcl9P3BIt165Y-3Owsq4vY6MKMFhIAf_V1F2JFywWI6t7y/pub?gid=1056133918&single=true&output=csv";
 
-    const map = L.map("map").setView([45.52, -122.68], 10);
+    const map = L.map("map", {
+      zoomControl: true
+    }).setView([45.52, -122.68], 10);
 
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
 
-    function colorForRanking(score) {
-      if (score >= 9) return "#d4af37";   // gold
-      if (score >= 8) return "#2e8b57";   // green
-      if (score >= 7) return "#3b82f6";   // blue
-      return "#777777";                   // gray
+    const markersLayer = L.layerGroup().addTo(map);
+    let allRows = [];
+    let currentFilter = "all";
+
+    function getMarkerColor(score) {
+      if (score >= 9) return "#d4af37";
+      if (score >= 8) return "#2e8b57";
+      if (score >= 7) return "#3b82f6";
+      return "#777777";
     }
 
-    function markerIcon(score) {
-      const color = colorForRanking(score);
+    function getMarkerSize(score) {
+      if (score >= 9) return 26;
+      if (score >= 8) return 22;
+      return 18;
+    }
+
+    function buildIcon(score) {
+      const color = getMarkerColor(score);
+      const size = getMarkerSize(score);
+
       return L.divIcon({
         className: "",
         html: `
           <div style="
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: ${color};
-            border: 2px solid white;
-            box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
-          "></div>
+            width:${size}px;
+            height:${size}px;
+            border-radius:50%;
+            background:${color};
+            border:2px solid white;
+            box-shadow:0 0 0 1px rgba(0,0,0,0.35);
+          " title="Score ${Number.isFinite(score) ? score.toFixed(1) : 'N/A'}"></div>
         `,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-        popupAnchor: [0, -10]
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+        popupAnchor: [0, -8]
       });
     }
 
-    const bounds = L.latLngBounds([]);
+    function normalizeRow(row) {
+      const shop = row["Donut Shop"] || "";
+      const address = row["Address"] || "";
+      const lat = parseFloat(row["Latitude"]);
+      const lon = parseFloat(row["Longitude"]);
+      const maxRanking = parseFloat(row["Max Ranking"]);
+      const topDonut = row["Top Donut"] || "";
+      const mapsUrl =
+        row["Google Maps URL"] ||
+        ("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${lat},${lon}`));
+
+      return {
+        shop,
+        address,
+        lat,
+        lon,
+        maxRanking,
+        topDonut,
+        mapsUrl
+      };
+    }
+
+    function passesFilter(row) {
+      if (currentFilter === "all") return true;
+      const threshold = parseFloat(currentFilter);
+      return Number.isFinite(row.maxRanking) && row.maxRanking >= threshold;
+    }
+
+    function renderMarkers() {
+      markersLayer.clearLayers();
+      const bounds = L.latLngBounds([]);
+      let visibleCount = 0;
+
+      allRows
+        .filter(row => row.shop && Number.isFinite(row.lat) && Number.isFinite(row.lon))
+        .filter(passesFilter)
+        .forEach(row => {
+          visibleCount += 1;
+
+          const popupHtml = `
+            <div class="popup-title">${escapeHtml(row.shop)}</div>
+            <div><strong>Max ranking:</strong> ${Number.isFinite(row.maxRanking) ? row.maxRanking.toFixed(1) : "N/A"}</div>
+            ${row.topDonut ? `<div><strong>Top donut:</strong> ${escapeHtml(row.topDonut)}</div>` : ""}
+            ${row.address ? `<div><strong>Address:</strong> ${escapeHtml(row.address)}</div>` : ""}
+            <div style="margin-top:8px;">
+              <a href="${row.mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+            </div>
+          `;
+
+          const marker = L.marker([row.lat, row.lon], {
+            icon: buildIcon(row.maxRanking)
+          });
+
+          marker.bindPopup(popupHtml);
+          marker.addTo(markersLayer);
+          bounds.extend([row.lat, row.lon]);
+        });
+
+      if (visibleCount > 0 && bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.08));
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
 
     Papa.parse(CSV_URL, {
       download: true,
       header: true,
       skipEmptyLines: true,
       complete: function(results) {
-        const rows = results.data;
-
-        rows.forEach(row => {
-          const shop = row["Donut Shop"];
-          const address = row["Address"];
-          const lat = parseFloat(row["Latitude"]);
-          const lon = parseFloat(row["Longitude"]);
-          const maxRanking = parseFloat(row["Max Ranking"]);
-          const topDonut = row["Top Donut"] || "";
-
-          if (!shop || Number.isNaN(lat) || Number.isNaN(lon)) {
-            return;
-          }
-
-          const gmapsUrl =
-            "https://www.google.com/maps/search/?api=1&query=" +
-            encodeURIComponent(`${lat},${lon}`);
-
-          const popupHtml = `
-            <div class="popup-title">${shop}</div>
-            <div><strong>Max ranking:</strong> ${Number.isFinite(maxRanking) ? maxRanking.toFixed(1) : "N/A"}</div>
-            ${topDonut ? `<div><strong>Top donut:</strong> ${topDonut}</div>` : ""}
-            ${address ? `<div><strong>Address:</strong> ${address}</div>` : ""}
-            <div style="margin-top:8px;">
-              <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
-            </div>
-          `;
-
-          const marker = L.marker([lat, lon], {
-            icon: markerIcon(maxRanking)
-          }).addTo(map);
-
-          marker.bindPopup(popupHtml);
-          bounds.extend([lat, lon]);
-        });
-
-        if (bounds.isValid()) {
-          map.fitBounds(bounds.pad(0.08));
-        }
+        allRows = results.data.map(normalizeRow);
+        renderMarkers();
       },
       error: function(err) {
-        console.error("CSV load failed:", err);
-        alert("Could not load the donut map data. Check the CSV URL and publishing settings.");
+        console.error(err);
+        alert("Could not load map data. Double-check the published CSV URL and make sure the map_data tab is published.");
       }
     });
 
-    const legend = L.control({ position: "bottomright" });
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentFilter = btn.dataset.filter;
+        renderMarkers();
+      });
+    });
 
+    const legend = L.control({ position: "bottomright" });
     legend.onAdd = function() {
       const div = L.DomUtil.create("div", "legend");
       div.innerHTML = `
-        <div><strong>Ranking</strong></div>
+        <div><strong>Ratings</strong></div>
         <div class="legend-row"><span class="dot" style="background:#d4af37;"></span> 9.0+</div>
         <div class="legend-row"><span class="dot" style="background:#2e8b57;"></span> 8.0 to 8.9</div>
         <div class="legend-row"><span class="dot" style="background:#3b82f6;"></span> 7.0 to 7.9</div>
@@ -193,7 +342,6 @@
       `;
       return div;
     };
-
     legend.addTo(map);
   </script>
 </body>

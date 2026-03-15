@@ -201,11 +201,18 @@
     let currentFilter = "all";
 
     function getMarkerColor(score) {
-      if (score >= 9) return "#d4af37";
-      if (score >= 8) return "#2e8b57";
-      if (score >= 7) return "#3b82f6";
-      return "#777777";
+      if (score >= 9.5) return "#7f1d1d";   // elite
+      if (score >= 9.0) return "#ef4444";   // excellent
+      if (score >= 8.0) return "#8b5cf6";   // very good
+      return "#3b82f6";                     // good
     }
+
+//    function getMarkerColor(score) {
+//      if (score >= 9) return "#d4af37";
+//      if (score >= 8) return "#2e8b57";
+//      if (score >= 7) return "#3b82f6";
+//      return "#777777";
+//    }
 
     function getMarkerSize(score) {
       if (score >= 9) return 26;

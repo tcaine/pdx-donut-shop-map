@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portland Donut Map</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #faf7f2;
+      color: #222;
+    }
+
+    header {
+      padding: 16px 18px 10px 18px;
+      background: white;
+      border-bottom: 1px solid #ddd;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 1.25rem;
+    }
+
+    .sub {
+      font-size: 0.95rem;
+      color: #555;
+    }
+
+    #map {
+      height: calc(100vh - 84px);
+      width: 100%;
+    }
+
+    .popup-title {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .legend {
+      background: white;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .leaflet-popup-content {
+      min-width: 220px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Donut Shop Map</h1>
+    <div class="sub">Tap a marker to see the shop and its highest donut score.</div>
+  </header>
+
+  <div id="map"></div>
+
+  <script>
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUtsvypiFEGpaoCJsTDe_HetHkdJziRKKcl9P3BIt165Y-3Owsq4vY6MKMFhIAf_V1F2JFywWI6t7y/pub?gid=1056133918&single=true&output=csv";
+
+    const map = L.map("map").setView([45.52, -122.68], 10);
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    function colorForRanking(score) {
+      if (score >= 9) return "#d4af37";   // gold
+      if (score >= 8) return "#2e8b57";   // green
+      if (score >= 7) return "#3b82f6";   // blue
+      return "#777777";                   // gray
+    }
+
+    function markerIcon(score) {
+      const color = colorForRanking(score);
+      return L.divIcon({
+        className: "",
+        html: `
+          <div style="
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: ${color};
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+          "></div>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+        popupAnchor: [0, -10]
+      });
+    }
+
+    const bounds = L.latLngBounds([]);
+
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        const rows = results.data;
+
+        rows.forEach(row => {
+          const shop = row["Donut Shop"];
+          const address = row["Address"];
+          const lat = parseFloat(row["Latitude"]);
+          const lon = parseFloat(row["Longitude"]);
+          const maxRanking = parseFloat(row["Max Ranking"]);
+          const topDonut = row["Top Donut"] || "";
+
+          if (!shop || Number.isNaN(lat) || Number.isNaN(lon)) {
+            return;
+          }
+
+          const gmapsUrl =
+            "https://www.google.com/maps/search/?api=1&query=" +
+            encodeURIComponent(`${lat},${lon}`);
+
+          const popupHtml = `
+            <div class="popup-title">${shop}</div>
+            <div><strong>Max ranking:</strong> ${Number.isFinite(maxRanking) ? maxRanking.toFixed(1) : "N/A"}</div>
+            ${topDonut ? `<div><strong>Top donut:</strong> ${topDonut}</div>` : ""}
+            ${address ? `<div><strong>Address:</strong> ${address}</div>` : ""}
+            <div style="margin-top:8px;">
+              <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+            </div>
+          `;
+
+          const marker = L.marker([lat, lon], {
+            icon: markerIcon(maxRanking)
+          }).addTo(map);
+
+          marker.bindPopup(popupHtml);
+          bounds.extend([lat, lon]);
+        });
+
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.08));
+        }
+      },
+      error: function(err) {
+        console.error("CSV load failed:", err);
+        alert("Could not load the donut map data. Check the CSV URL and publishing settings.");
+      }
+    });
+
+    const legend = L.control({ position: "bottomright" });
+
+    legend.onAdd = function() {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `
+        <div><strong>Ranking</strong></div>
+        <div class="legend-row"><span class="dot" style="background:#d4af37;"></span> 9.0+</div>
+        <div class="legend-row"><span class="dot" style="background:#2e8b57;"></span> 8.0 to 8.9</div>
+        <div class="legend-row"><span class="dot" style="background:#3b82f6;"></span> 7.0 to 7.9</div>
+        <div class="legend-row"><span class="dot" style="background:#777777;"></span> Below 7.0</div>
+      `;
+      return div;
+    };
+
+    legend.addTo(map);
+  </script>
+</body>
+</html>

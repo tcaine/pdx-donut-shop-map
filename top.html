@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brandon Lyons - Portland's Best Donut</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #faf8f3;
+      color: #222;
+    }
+
+    header {
+      background: white;
+      border-bottom: 1px solid #ddd;
+      padding: 14px 16px 10px 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 1.2rem;
+      line-height: 1.2;
+    }
+
+    .sub {
+      font-size: 0.95rem;
+      color: #555;
+    }
+
+    .tabs,
+    .toolbar,
+    .top-donuts-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button.filter-btn,
+    button.tab-btn,
+    .top-donuts-controls input {
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+
+    button.filter-btn,
+    button.tab-btn {
+      cursor: pointer;
+    }
+
+    button.filter-btn.active,
+    button.tab-btn.active {
+      border-color: #111;
+      font-weight: bold;
+    }
+
+    .top-donuts-controls input {
+      width: 72px;
+      border-radius: 12px;
+    }
+
+    .view {
+      width: 100%;
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100vh - 176px);
+    }
+
+    #top-donuts-view {
+      min-height: calc(100vh - 176px);
+      box-sizing: border-box;
+      padding: 16px;
+    }
+
+    .top-donuts-panel {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .top-donuts-note {
+      color: #555;
+      font-size: 0.95rem;
+      margin: 0 0 14px 0;
+    }
+
+    .top-donuts-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .donut-card {
+      background: white;
+      border: 1px solid #e2e2e2;
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .donut-rank {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .donut-title {
+      font-size: 1rem;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .donut-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 0.95rem;
+    }
+
+    .score-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: white;
+      vertical-align: middle;
+    }
+
+    .leaflet-popup-content {
+      min-width: 220px;
+    }
+
+    .popup-title {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .legend {
+      background: white;
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.18);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    a {
+      color: #0b57d0;
+    }
+
+    @media (max-width: 640px) {
+      #map {
+        height: calc(100vh - 220px);
+      }
+
+      #top-donuts-view {
+        min-height: calc(100vh - 220px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Brandon Lyons - Portland's Best Donut</h1>
+    <div class="sub">Tap a marker to see the shop, top score, and best donut sampled.</div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-view="map-view">Map</button>
+      <button class="tab-btn" data-view="top-donuts-view">Top Donuts</button>
+    </div>
+
+    <div class="toolbar">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="9">9.0+</button>
+      <button class="filter-btn" data-filter="8">8.0+</button>
+      <button class="filter-btn" data-filter="7">7.0+</button>
+    </div>
+  </header>
+
+  <div id="map-view" class="view active">
+    <div id="map"></div>
+  </div>
+
+  <section id="top-donuts-view" class="view">
+    <div class="top-donuts-panel">
+      <div class="top-donuts-controls">
+        <label for="top-n-input"><strong>Show top</strong></label>
+        <input id="top-n-input" type="number" min="1" max="100" step="1" value="5" />
+        <span>donuts</span>
+      </div>
+      <p class="top-donuts-note">
+        Ranked from the current published data using each shop's <strong>Top Donut</strong> and <strong>Max Ranking</strong> fields.
+      </p>
+      <div id="top-donuts-list" class="top-donuts-list"></div>
+    </div>
+  </section>
+
+  <script>
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUtsvypiFEGpaoCJsTDe_HetHkdJziRKKcl9P3BIt165Y-3Owsq4vY6MKMFhIAf_V1F2JFywWI6t7y/pub?gid=1056133918&single=true&output=csv";
+
+    const map = L.map("map", {
+      zoomControl: true
+    }).setView([45.52, -122.68], 10);
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    let allRows = [];
+    let currentFilter = "all";
+    let currentView = "map-view";
+
+    function getMarkerColor(score) {
+      if (score >= 9.5) return "#7f1d1d";
+      if (score >= 9.0) return "#ef4444";
+      if (score >= 8.0) return "#8b5cf6";
+      return "#3b82f6";
+    }
+
+    function getMarkerSize(score) {
+      if (score >= 9) return 26;
+      if (score >= 8) return 22;
+      return 18;
+    }
+
+    function buildIcon(score) {
+      const color = getMarkerColor(score);
+      const size = getMarkerSize(score);
+
+      return L.divIcon({
+        className: "",
+        html: `
+          <div style="
+            width:${size}px;
+            height:${size}px;
+            border-radius:50%;
+            background:${color};
+            border:2px solid white;
+            box-shadow:0 0 0 1px rgba(0,0,0,0.35);
+          " title="Score ${Number.isFinite(score) ? score.toFixed(1) : 'N/A'}"></div>
+        `,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+        popupAnchor: [0, -8]
+      });
+    }
+
+    function normalizeRow(row) {
+      const shop = row["Donut Shop"] || "";
+      const address = row["Address"] || "";
+      const lat = parseFloat(row["Latitude"]);
+      const lon = parseFloat(row["Longitude"]);
+      const maxRanking = parseFloat(row["Max Ranking"]);
+      const topDonut = row["Top Donut"] || "";
+      const mapsUrl =
+        row["Google Maps URL"] ||
+        ("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${lat},${lon}`));
+
+      return {
+        shop,
+        address,
+        lat,
+        lon,
+        maxRanking,
+        topDonut,
+        mapsUrl
+      };
+    }
+
+    function passesFilter(row) {
+      if (currentFilter === "all") return true;
+      const threshold = parseFloat(currentFilter);
+      return Number.isFinite(row.maxRanking) && row.maxRanking >= threshold;
+    }
+
+    function getVisibleRows() {
+      return allRows
+        .filter(row => row.shop && Number.isFinite(row.maxRanking))
+        .filter(passesFilter);
+    }
+
+    function renderMarkers() {
+      markersLayer.clearLayers();
+      const bounds = L.latLngBounds([]);
+      let visibleCount = 0;
+
+      allRows
+        .filter(row => row.shop && Number.isFinite(row.lat) && Number.isFinite(row.lon))
+        .filter(passesFilter)
+        .forEach(row => {
+          visibleCount += 1;
+
+          const popupHtml = `
+            <div class="popup-title">${escapeHtml(row.shop)}</div>
+            <div><strong>Max ranking:</strong> ${Number.isFinite(row.maxRanking) ? row.maxRanking.toFixed(1) : "N/A"}</div>
+            ${row.topDonut ? `<div><strong>Top donut:</strong> ${escapeHtml(row.topDonut)}</div>` : ""}
+            ${row.address ? `<div><strong>Address:</strong> ${escapeHtml(row.address)}</div>` : ""}
+            <div style="margin-top:8px;">
+              <a href="${row.mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+            </div>
+          `;
+
+          const marker = L.marker([row.lat, row.lon], {
+            icon: buildIcon(row.maxRanking)
+          });
+
+          marker.bindPopup(popupHtml);
+          marker.addTo(markersLayer);
+          bounds.extend([row.lat, row.lon]);
+        });
+
+      if (visibleCount > 0 && bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.08));
+      }
+    }
+
+    function renderTopDonuts() {
+      const topDonutsList = document.getElementById("top-donuts-list");
+      const requestedCount = parseInt(document.getElementById("top-n-input").value, 10);
+      const count = Number.isFinite(requestedCount) && requestedCount > 0 ? Math.min(requestedCount, 100) : 10;
+
+      const rankedRows = getVisibleRows()
+        .filter(row => row.topDonut)
+        .sort((a, b) => b.maxRanking - a.maxRanking || a.shop.localeCompare(b.shop))
+        .slice(0, count);
+
+      if (!rankedRows.length) {
+        topDonutsList.innerHTML = '<div class="donut-card">No donuts match the current filter.</div>';
+        return;
+      }
+
+      topDonutsList.innerHTML = rankedRows.map((row, index) => `
+        <article class="donut-card">
+          <div class="donut-rank">#${index + 1}</div>
+          <div class="donut-title">${escapeHtml(row.topDonut)}</div>
+          <div class="donut-meta">
+            <div><strong>Shop:</strong> ${escapeHtml(row.shop)}</div>
+            <div><strong>Score:</strong> <span class="score-pill" style="background:${getMarkerColor(row.maxRanking)};">${row.maxRanking.toFixed(1)}</span></div>
+            ${row.address ? `<div><strong>Address:</strong> ${escapeHtml(row.address)}</div>` : ""}
+            <div><a href="${row.mapsUrl}" target="_blank" rel="noopener noreferrer">Open shop in Google Maps</a></div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderActiveView() {
+      renderMarkers();
+      renderTopDonuts();
+
+      if (currentView === "map-view") {
+        setTimeout(() => map.invalidateSize(), 0);
+      }
+    }
+
+    function setView(viewId) {
+      currentView = viewId;
+      document.querySelectorAll(".view").forEach(view => {
+        view.classList.toggle("active", view.id === viewId);
+      });
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.view === viewId);
+      });
+      renderActiveView();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    Papa.parse(CSV_URL, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        allRows = results.data.map(normalizeRow);
+        renderActiveView();
+      },
+      error: function(err) {
+        console.error(err);
+        alert("Could not load map data. Double-check the published CSV URL and make sure the map_data tab is published.");
+      }
+    });
+
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentFilter = btn.dataset.filter;
+        renderActiveView();
+      });
+    });
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        setView(btn.dataset.view);
+      });
+    });
+
+    document.getElementById("top-n-input").addEventListener("input", () => {
+      renderTopDonuts();
+    });
+
+    const legend = L.control({ position: "bottomright" });
+    legend.onAdd = function() {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `
+        <div><strong>Ratings</strong></div>
+        <div class="legend-row"><span class="dot" style="background:#7f1d1d;"></span> 9.5+</div>
+        <div class="legend-row"><span class="dot" style="background:#ef4444;"></span> 9.0 to 9.4</div>
+        <div class="legend-row"><span class="dot" style="background:#8b5cf6;"></span> 8.0 to 8.9</div>
+        <div class="legend-row"><span class="dot" style="background:#3b82f6;"></span> Below 8.0</div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+  </script>
+</body>
+</html>

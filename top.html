@@ -196,6 +196,34 @@
         min-height: calc(100vh - 220px);
       }
     }
+
+    .site-footer {
+      margin-top: 40px;
+      padding: 14px 0;
+      font-size: 13px;
+      color: #777;
+      text-align: center;
+      border-top: 1px solid #eee;
+    }
+
+    .site-footer a {
+      color: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      opacity: 0.85;
+      transition: opacity 0.2s ease;
+    }
+
+    .site-footer a:hover {
+      opacity: 1;
+    }
+
+    .site-footer svg {
+      opacity: 0.7;
+    }
+
   </style>
 </head>
 <body>
@@ -460,5 +488,16 @@
     };
     legend.addTo(map);
   </script>
+
+  <footer class="site-footer">
+  Built by 
+  <a href="https://instagram.com/todd.caine" target="_blank">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M7.75 2C4.57 2 2 4.57 2 7.75v8.5C2 19.43 4.57 22 7.75 22h8.5C19.43 22 22 19.43 22 16.25v-8.5C22 4.57 19.43 2 16.25 2h-8.5zm0 2h8.5C18.22 4 20 5.78 20 7.75v8.5c0 1.97-1.78 3.75-3.75 3.75h-8.5C5.78 20 4 18.22 4 16.25v-8.5C4 5.78 5.78 4 7.75 4zm9.5 1.75a1.25 1.25 0 100 2.5 1.25 1.25 0 000-2.5zM12 7a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+    </svg>
+    Todd Caine
+  </a>
+</footer>
+
 </body>
 </html>
